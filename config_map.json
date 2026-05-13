@@ -1,0 +1,34 @@
+[
+    {
+        "typeName": "BTMConfigurationParameterQuantity",
+        "parameterName": "height_cup",
+        "minValue": 40.0,
+        "maxValue": 200.0,
+        "defaultValue": 107.0,
+        "appLabel": "Height"
+    },
+    {
+        "typeName": "BTMConfigurationParameterQuantity",
+        "parameterName": "diameter_top",
+        "minValue": 40.0,
+        "maxValue": 150.0,
+        "defaultValue": 80.0,
+        "appLabel": "Top Diameter"
+    },
+    {
+        "typeName": "BTMConfigurationParameterQuantity",
+        "parameterName": "diameter_bottom",
+        "minValue": 30.0,
+        "maxValue": 120.0,
+        "defaultValue": 52.0,
+        "appLabel": "Bottom Diameter"
+    },
+    {
+        "typeName": "BTMConfigurationParameterQuantity",
+        "parameterName": "thickness_cup",
+        "minValue": 1.0,
+        "maxValue": 5.0,
+        "defaultValue": 1.0,
+        "appLabel": "Thickness"
+    }
+]
