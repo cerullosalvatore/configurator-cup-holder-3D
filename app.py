@@ -1,5 +1,4 @@
 import json
-import time
 
 import requests
 import streamlit as st
@@ -67,58 +66,41 @@ with col1:
         config_parts = [f"{p_name}={p_val}+mm" for p_name, p_val in user_inputs.items()]
         config_string = ";".join(config_parts)
 
-        # 1. Creiamo una sessione per gestire i redirect correttamente
-        session = requests.Session()
-        session.auth = (ACCESS_KEY.strip(), SECRET_KEY.strip())
+        auth = (ACCESS_KEY.strip(), SECRET_KEY.strip())
 
-        # 2. Endpoint diretto
-        url = f"https://cad.onshape.com/api/partstudios/d/{DID}/w/{WID}/e/{EID}/stl"
-
+        # Usiamo l'endpoint del PartStudio (più stabile di quello della singola parte)
+        url = f"https://cad.onshape.com/api/parts/d/{DID}/w/{WID}/e/{EID}/partid/JID/stl"
         params = {
             "mode": "binary",
             "units": "millimeter",
             "configuration": config_string,
-            "partIds": "JID"
+            "scale": 1
         }
 
-        # Header per dire a Onshape che vogliamo il file binario
         headers = {"Accept": "application/octet-stream"}
 
-        with st.spinner("STL Generation..."):
-            try:
-                # Usiamo la sessione invece di requests.get
-                res = session.get(url, params=params, headers=headers, allow_redirects=True)
+        with st.spinner("Downloading file..."):
+            # 1. Chiamata con allow_redirects=False per evitare il 401 sul secondo server
+            res = requests.get(url, params=params, auth=auth, headers=headers, allow_redirects=False)
 
-                if res.status_code == 200:
-                    # Se il contenuto è troppo piccolo, Onshape ha mandato un errore mascherato
-                    if len(res.content) < 500:
-                        st.error("The generated file is too small. Check the part ID (JID).")
-                        st.write(res.text)
-                    else:
-                        st.success(f"✅ STL Generated ({len(res.content) / 1024:.1f} KB)")
-                        st.download_button(
-                            label="💾 Download STL",
-                            data=res.content,
-                            file_name="cup_holder.stl",
-                            mime="application/sla"
-                        )
-                elif res.status_code == 401:
-                    #st.error("Errore 401: Problema di autorizzazione durante il redirect.")
-                    #st.info("Sto tentando il metodo alternativo senza redirect...")
+            if res.status_code == 307:
+                # Recuperiamo l'URL di redirect fornito da Onshape
+                redirect_url = res.headers['Location']
 
-                    # Tentativo disperato: prendiamo manualmente l'URL del redirect
-                    res_no_redir = session.get(url, params=params, headers=headers, allow_redirects=False)
-                    if res_no_redir.status_code == 307:
-                        new_url = res_no_redir.headers['Location']
-                        res_final = session.get(new_url, auth=session.auth)  # Riautentichiamo manualmente
-                        if res_final.status_code == 200:
-                            st.download_button("💾 Download STL", res_final.content, "cup_holder.stl")
-                else:
-                    st.error(f"Error ({res.status_code})")
-                    st.write(res.text)
+                st.success("✅ Model configured!")
 
-            except Exception as e:
-                st.error(f"Connection error: {e}")
+                # Pulsante nativo di Streamlit che punta all'URL di download
+                # Si comporta come un normale st.button ma apre il link
+                st.link_button(
+                    label="💾 Download STL",
+                    url=redirect_url,
+                    help="Click to download the stl file",
+                    type="primary"  # Lo rende colorato (solitamente rosso/arancio o blu a seconda del tema)
+                )
+
+            else:
+                st.error(f"Error: {res.status_code}")
+                st.write(res.text)
 
 with col2:
     st.image("images/schema.png")
