@@ -67,13 +67,13 @@ with col1:
         config_parts = [f"{p_name}={p_val}+mm" for p_name, p_val in user_inputs.items()]
         config_string = ";".join(config_parts)
 
-        # Prepariamo le credenziali
-        auth = (ACCESS_KEY.strip(), SECRET_KEY.strip())
+        # 1. Creiamo una sessione per gestire i redirect correttamente
+        session = requests.Session()
+        session.auth = (ACCESS_KEY.strip(), SECRET_KEY.strip())
 
-        # URL di esportazione diretta (Endpoint Sincrono)
+        # 2. Endpoint diretto
         url = f"https://cad.onshape.com/api/partstudios/d/{DID}/w/{WID}/e/{EID}/stl"
 
-        # Parametri della richiesta
         params = {
             "mode": "binary",
             "units": "millimeter",
@@ -81,47 +81,41 @@ with col1:
             "partIds": "JID"
         }
 
-        # Header fondamentali per forzare il download binario
-        headers = {
-            "Accept": "application/octet-stream"
-        }
+        # Header per dire a Onshape che vogliamo il file binario
+        headers = {"Accept": "application/octet-stream"}
 
-        with st.spinner("Generating and downloading..."):
+        with st.spinner("STL Generation..."):
             try:
-                # Una sola chiamata GET.
-                # Usiamo stream=True per gestire meglio i file binari pesanti
-                res = requests.get(url, params=params, auth=auth, headers=headers, stream=True)
+                # Usiamo la sessione invece di requests.get
+                res = session.get(url, params=params, headers=headers, allow_redirects=True)
 
                 if res.status_code == 200:
-                    # Leggiamo il contenuto
-                    stl_body = res.content
-
-                    if len(stl_body) < 500:
-                        st.error("The server responded, but the file appears to be empty or corrupt.")
+                    # Se il contenuto è troppo piccolo, Onshape ha mandato un errore mascherato
+                    if len(res.content) < 500:
+                        st.error("The generated file is too small. Check the part ID (JID).")
                         st.write(res.text)
                     else:
-                        st.success(f"✅ Ready! ({len(stl_body) / 1024:.1f} KB)")
+                        st.success(f"✅ STL Generated ({len(res.content) / 1024:.1f} KB)")
                         st.download_button(
                             label="💾 Download STL",
-                            data=stl_body,
+                            data=res.content,
                             file_name="cup_holder.stl",
                             mime="application/sla"
                         )
-
-                # Gestione specifica del 401 causato dai redirect regionali
                 elif res.status_code == 401:
-                    # Forza il server regionale se quello principale fallisce
-                    url_eu = url.replace("cad.onshape.com", "cad-euw1.onshape.com")
-                    res_eu = requests.get(url_eu, params=params, auth=auth, headers=headers)
+                    #st.error("Errore 401: Problema di autorizzazione durante il redirect.")
+                    #st.info("Sto tentando il metodo alternativo senza redirect...")
 
-                    if res_eu.status_code == 200:
-                        st.download_button("💾 Download STL", res_eu.content, "cup_holder.stl")
-                    else:
-                        st.error("Authorization Error (401). Please check your API keys.")
-
+                    # Tentativo disperato: prendiamo manualmente l'URL del redirect
+                    res_no_redir = session.get(url, params=params, headers=headers, allow_redirects=False)
+                    if res_no_redir.status_code == 307:
+                        new_url = res_no_redir.headers['Location']
+                        res_final = session.get(new_url, auth=session.auth)  # Riautentichiamo manualmente
+                        if res_final.status_code == 200:
+                            st.download_button("💾 Download STL", res_final.content, "cup_holder.stl")
                 else:
-                    st.error(f"Error: {res.status_code}")
-                    st.json(res.text)
+                    st.error(f"Error ({res.status_code})")
+                    st.write(res.text)
 
             except Exception as e:
                 st.error(f"Connection error: {e}")
